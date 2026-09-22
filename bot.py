@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from google import genai
 
 # 1. GEMINI API ANAHTARINIZI BURAYA YAZIN
-gemini_client = genai.Client(api_key="AQ.Ab8RN6KzbBf_JhkETZBtBNKkyTOKitinMu7Ijtg8ok26RNveTA")
+gemini_client = genai.Client(api_key="")
 
 # Discord Bot Yetkileri
 intents = discord.Intents.default()
@@ -75,4 +75,4 @@ async def ozet(ctx, saat: int = 2):
         print(f"Hata: {e}")
 
 # 2. DISCORD BOT TOKENINIZI BURAYA YAZIN
-bot.run("MTU1MjAwMjMzODQyMjUzMDA0OA.GvwW1w.9dOCr73ZefsVw5yj5Vnov2zYeNvhruEC8-qUTM")
+bot.run("")
