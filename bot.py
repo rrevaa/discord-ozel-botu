@@ -27,7 +27,7 @@ async def ozet(ctx, saat: int = 2):
         await ctx.send("Lütfen 1 ile 5 arasında bir saat değeri girin (Örn: `!ozet 2`).")
         return
 
-    await ctx.send(f"⏳ Son {saat} saat içerisindeki sohbet Gemini ile taranıyor...")
+    await ctx.send(f"⏳ Son {saat} saat içerisindeki sohbet heemmmmeeen taranıyor, sonuç birazcık gecikebilir ✨...")
 
     zaman_siniri = datetime.now(timezone.utc) - timedelta(hours=saat)
     mesaj_gecmisi = []
