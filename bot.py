@@ -32,13 +32,13 @@ async def ozet(ctx, saat: int = 2):
         await ctx.send("Lütfen 1 ile 12 arasında bir saat değeri girin (Örn: `!ozet 6`).")
         return
 
-    await ctx.send(f"⏳ Son {saat} saat içerisindeki sohbet hemmmmeeenn taranıyor, taranan mesaj sayısına bağlı olarak işlem birazcık, çok azıcık uzayabilir✨...")
+    await ctx.send(f"⏳ Son {saat} saat içerisindeki sohbet hemmmmeeenn taranıyor, taranan mesaj sayısına bağlı olarak işlem birazcık, çok azıcık uzayabilir✨..."")
 
     zaman_siniri = datetime.now(timezone.utc) - timedelta(hours=saat)
     mesaj_gecmisi = []
 
     try:
-        # Son mesajları kanaldan çek (Tarama limiti 1800 yapıldı)
+        # Son mesajları kanaldan çek (Limit 1800)
         async for message in ctx.channel.history(limit=1800, after=zaman_siniri):
             if message.author.bot:
                 continue
@@ -62,13 +62,13 @@ async def ozet(ctx, saat: int = 2):
             f"İşte son {saat} saatin sohbet geçmişi:\n\n{sohbet_metni}"
         )
 
-        # 503 ve sunucu yoğunluğu hatalarına karşı yedekli model listesi
-        models_to_try = ["gemini-3.6-flash", "gemini-2.5-flash"]
+        # Güncel ve aktif Gemini modelleri
+        models_to_try = ["gemini-3.6-flash", "gemini-3.6-pro"]
         ozet_metni = None
         son_hata = None
 
         for model_name in models_to_try:
-            for deneme in range(2):
+            for deneme in range(3):  # Her model için 3 defa dene
                 try:
                     response = gemini_client.models.generate_content(
                         model=model_name,
@@ -79,7 +79,8 @@ async def ozet(ctx, saat: int = 2):
                 except Exception as e:
                     son_hata = e
                     if "503" in str(e):
-                        await asyncio.sleep(2)
+                        # 503 hatasında bekleme süresini kademeli artır (2s, 4s, 6s)
+                        await asyncio.sleep((deneme + 1) * 2)
                         continue
                     else:
                         break
