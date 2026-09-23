@@ -4,14 +4,14 @@ from discord.ext import commands
 from datetime import datetime, timedelta, timezone
 from google import genai
 
-# 1. API anahtarlarını çek
+# 1. API anahtarlarını ortam değişkenlerinden al
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
-# Gemini istemcisi
+# Gemini istemcisini başlat
 gemini_client = genai.Client(api_key=GEMINI_KEY)
 
-# Discord Bot ayarları
+# Discord Bot izinlerini ayarla
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -56,9 +56,9 @@ async def ozet(ctx, saat: int = 2):
             f"İşte son {saat} saatin sohbet geçmişi:\n\n{sohbet_metni}"
         )
 
-        # Gemini 2.5 Flash ile özet oluştur
+        # Güncel gemini-3.6-flash modeli kullanımı
         response = gemini_client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3.6-flash",
             contents=prompt
         )
         ozet_metni = response.text
