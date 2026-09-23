@@ -19,6 +19,13 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
+    try:
+        # 1. Discord'daki global tüm slash komutları temizle
+        bot.tree.clear_commands(guild=None)
+        await bot.tree.sync()
+        print("✅ Tüm Slash Komutları Discord'dan silindi!")
+    except Exception as e:
+        print(f"Silme hatası: {e}")
     print(f"✅ {bot.user} başarıyla bağlandı ve aktif!")
 
 @bot.command(name="ozet")
