@@ -19,13 +19,6 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
-    try:
-        # 1. Discord'daki global tüm slash komutları temizle
-        bot.tree.clear_commands(guild=None)
-        await bot.tree.sync()
-        print("✅ Tüm Slash Komutları Discord'dan silindi!")
-    except Exception as e:
-        print(f"Silme hatası: {e}")
     print(f"✅ {bot.user} başarıyla bağlandı ve aktif!")
 
 @bot.command(name="ozet")
@@ -34,7 +27,7 @@ async def ozet(ctx, saat: int = 2):
         await ctx.send("Lütfen 1 ile 5 arasında bir saat değeri girin (Örn: `!ozet 2`).")
         return
 
-    await ctx.send(f"⏳ Son {saat} saat içerisindeki sohbet heemmmmeeen taranıyor, sonuç birazcık gecikebilir ✨...")
+    await ctx.send(f"⏳ Son {saat} saat içerisindeki sohbet hemmmmeeen taranıyor, birazcık gecikebilir✨...")
 
     zaman_siniri = datetime.now(timezone.utc) - timedelta(hours=saat)
     mesaj_gecmisi = []
