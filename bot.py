@@ -9,8 +9,9 @@ from google import genai
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
-# Botun SADECE çalışacağı kanalın ID'si (Rakam olarak girin)
-IZINLI_KANAL_ID = 1368582404763156512  # <-- Buraya kendi kanal ID'nizi yapıştırın
+# KANAL ID'LERİNİ BURAYA GİRİN (Rakam olarak yazın)
+HEDEF_KANAL_ID = 1368566503372492883  # Mesajları taranacak kanal (Örn: Genel Chat)
+KOMUT_KANAL_ID = 1368582404763156512  # Komutun çalışacağı kanal (Örn: Bot Komut Chati)
 
 # Gemini istemcisini başlat
 gemini_client = genai.Client(api_key=GEMINI_KEY)
@@ -29,9 +30,9 @@ async def on_ready():
 # ---------------------------------------------------------
 @bot.command(name="ozet")
 async def ozet(ctx, saat: int = 2):
-    # Kanal Kontrolü: Komut izin verilen kanalda yazılmadıysa çalıştırma
-    if ctx.channel.id != IZINLI_KANAL_ID:
-        await ctx.send(f"⚠️ Bu komut sadece <#{IZINLI_KANAL_ID}> kanalında kullanılabilir!")
+    # 1. Kanal Kontrolü: Komut sadece belirlediğiniz komut kanalında çalışır
+    if ctx.channel.id != KOMUT_KANAL_ID:
+        await ctx.send(f"⚠️ Bu komut sadece <#{KOMUT_KANAL_ID}> kanalında kullanılabilir!")
         return
 
     # Limit 1 ile 12 saat arasında ayarlandı
@@ -39,14 +40,20 @@ async def ozet(ctx, saat: int = 2):
         await ctx.send("Lütfen 1 ile 12 arasında bir saat değeri girin (Örn: `!ozet 6`).")
         return
 
-    await ctx.send(f"⏳ Son {saat} saat içerisindeki sohbet hemmmmeeenn taranıyor, taranan mesaj sayısına bağlı olarak işlem birazcık, çok azıcık uzayabilir✨...")
+    # Taranacak hedef kanalı Discord üzerinden bul
+    hedef_kanal = bot.get_channel(HEDEF_KANAL_ID)
+    if not hedef_kanal:
+        await ctx.send("⚠️ Taranacak hedef kanal bulunamadı! Lütfen kanal ID'sini kontrol edin.")
+        return
+
+    await ctx.send(f"⏳ <#{HEDEF_KANAL_ID}> kanalındaki son {saat} saatlik sohbet taranıyor, taranan mesaj sayısına göre işlem çok azıcık uzayabilir✨...")
 
     zaman_siniri = datetime.now(timezone.utc) - timedelta(hours=saat)
     mesaj_gecmisi = []
 
     try:
-        # Son mesajları kanaldan çek (Tarama limiti 1800)
-        async for message in ctx.channel.history(limit=1800, after=zaman_siniri):
+        # Mesaj geçmişini Genel Chat (hedef_kanal) üzerinden çek
+        async for message in hedef_kanal.history(limit=1800, after=zaman_siniri):
             if message.author.bot:
                 continue
             yazan = message.author.display_name
@@ -55,7 +62,7 @@ async def ozet(ctx, saat: int = 2):
                 mesaj_gecmisi.append(f"{yazan}: {icerik}")
 
         if not mesaj_gecmisi:
-            await ctx.send(f"Son {saat} saat içinde özetlenecek herhangi bir kullanıcı mesajı bulunamadı.")
+            await ctx.send(f"<#{HEDEF_KANAL_ID}> kanalında son {saat} saat içinde özetlenecek kullanıcı mesajı bulunamadı.")
             return
 
         sohbet_metni = "\n".join(mesaj_gecmisi)
@@ -100,11 +107,12 @@ async def ozet(ctx, saat: int = 2):
                 break
 
         if ozet_metni:
+            # Özet doğrudan komutun yazıldığı kanala gönderilir
             if len(ozet_metni) > 1900:
                 for chunk in [ozet_metni[i:i+1900] for i in range(0, len(ozet_metni), 1900)]:
                     await ctx.send(chunk)
             else:
-                await ctx.send(f"📋 **Son {saat} Saatin Sohbet Özeti:**\n\n{ozet_metni}")
+                await ctx.send(f"📋 **<#{HEDEF_KANAL_ID}> Kanalının Son {saat} Saatlik Sohbet Özeti:**\n\n{ozet_metni}")
         else:
             raise son_hata
 
