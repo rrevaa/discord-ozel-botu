@@ -17,24 +17,29 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# Bot hazır olduğunda çalışacak event
 @bot.event
 async def on_ready():
     print(f"✅ {bot.user} başarıyla bağlandı ve aktif!")
 
+# ---------------------------------------------------------
+# GEMINI İLE SOHBET ÖZETLEME KOMUTU (!ozet 1-12)
+# ---------------------------------------------------------
 @bot.command(name="ozet")
 async def ozet(ctx, saat: int = 2):
-    if saat < 1 or saat > 5:
-        await ctx.send("Lütfen 1 ile 5 arasında bir saat değeri girin (Örn: `!ozet 2`).")
+    # Limit 1 ile 12 saat arasında ayarlandı
+    if saat < 1 or saat > 12:
+        await ctx.send("Lütfen 1 ile 12 arasında bir saat değeri girin (Örn: `!ozet 6`).")
         return
 
-    await ctx.send(f"⏳ Son {saat} saat içerisindeki sohbet hemmmmeeen taranıyor, birazcık gecikebilir✨...")
+    await ctx.send(f"⏳ Son {saat} saat içerisindeki sohbet hemmmmeeenn taranıyor, taranan mesaj sayısına bağlı olarak işlem birazcık, çok azıcık uzayabilir✨...")
 
     zaman_siniri = datetime.now(timezone.utc) - timedelta(hours=saat)
     mesaj_gecmisi = []
 
     try:
-        # Son mesajları çek
-        async for message in ctx.channel.history(limit=500, after=zaman_siniri):
+        # Son mesajları kanaldan çek (Tarama limiti 1800 yapıldı)
+        async for message in ctx.channel.history(limit=1800, after=zaman_siniri):
             if message.author.bot:
                 continue
             yazan = message.author.display_name
@@ -62,9 +67,8 @@ async def ozet(ctx, saat: int = 2):
         ozet_metni = None
         son_hata = None
 
-        # Modelleri sırayla dene ve 503 hatasında bekle
         for model_name in models_to_try:
-            for deneme in range(2): # Her model için 2 defa dene
+            for deneme in range(2):
                 try:
                     response = gemini_client.models.generate_content(
                         model=model_name,
@@ -75,7 +79,7 @@ async def ozet(ctx, saat: int = 2):
                 except Exception as e:
                     son_hata = e
                     if "503" in str(e):
-                        await asyncio.sleep(2) # 503 aldıysa 2 saniye bekle
+                        await asyncio.sleep(2)
                         continue
                     else:
                         break
