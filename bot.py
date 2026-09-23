@@ -38,7 +38,7 @@ async def ozet(ctx, saat: int = 2):
     mesaj_gecmisi = []
 
     try:
-        # Son mesajları kanaldan çek (Limit 1800)
+        # Son mesajları kanaldan çek (Tarama limiti 1800)
         async for message in ctx.channel.history(limit=1800, after=zaman_siniri):
             if message.author.bot:
                 continue
@@ -62,28 +62,38 @@ async def ozet(ctx, saat: int = 2):
             f"İşte son {saat} saatin sohbet geçmişi:\n\n{sohbet_metni}"
         )
 
-        # Güncel ve aktif Gemini modelleri
-        models_to_try = ["gemini-3.6-flash", "gemini-3.6-pro"]
+        # Kullanılabilecek TÜM Aktif Gemini Metin Modelleri (En hızlıdan en güçlüye)
+        models_to_try = [
+            "gemini-3.6-flash",
+            "gemini-3.6-pro",
+            "gemini-1.5-flash",
+            "gemini-1.5-pro"
+        ]
+
         ozet_metni = None
         son_hata = None
 
+        # Modeller sırayla taranır
         for model_name in models_to_try:
-            for deneme in range(3):  # Her model için 3 defa dene
+            for deneme in range(2): # Her model 2 kez denenir
                 try:
                     response = gemini_client.models.generate_content(
                         model=model_name,
                         contents=prompt
                     )
-                    ozet_metni = response.text
-                    break
+                    if response.text:
+                        ozet_metni = response.text
+                        print(f"✅ Başarılı yanıt alınan model: {model_name}")
+                        break
                 except Exception as e:
                     son_hata = e
-                    if "503" in str(e):
-                        # 503 hatasında bekleme süresini kademeli artır (2s, 4s, 6s)
-                        await asyncio.sleep((deneme + 1) * 2)
+                    print(f"⚠️ {model_name} denenirken hata alındı: {e}")
+                    # Hata yoğunluk hatasıysa (503 veya 429) kısa bir süre bekleyip tekrar dene/diğer modele geç
+                    if "503" in str(e) or "429" in str(e):
+                        await asyncio.sleep(1.5)
                         continue
                     else:
-                        break
+                        break # 404 gibi kalıcı hatalarda doğrudan sonraki modele geç
             if ozet_metni:
                 break
 
@@ -97,7 +107,7 @@ async def ozet(ctx, saat: int = 2):
             raise son_hata
 
     except Exception as e:
-        await ctx.send(f"Özet oluşturulurken bir hata oluştu. Hata: `{e}`")
-        print(f"Hata detayı: {e}")
+        await ctx.send(f"Tüm modeller denendi ancak özet oluşturulamadı. Hata: `{e}`")
+        print(f"Son Hata detayı: {e}")
 
 bot.run(DISCORD_TOKEN)
