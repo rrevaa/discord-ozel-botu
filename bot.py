@@ -17,23 +17,39 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# Bot hazır olduğunda Slash komutlarını senkronize et
 @bot.event
 async def on_ready():
+    try:
+        synced = await bot.tree.sync()
+        print(f"✅ {len(synced)} adet Slash Komutu senkronize edildi!")
+    except Exception as e:
+        print(f"Slash komut senkronizasyon hatası: {e}")
     print(f"✅ {bot.user} başarıyla bağlandı ve aktif!")
 
+# ---------------------------------------------------------
+# DISCORD GELİŞTİRİCİ ROZETİ İÇİN SLASH COMMAND (/ping)
+# ---------------------------------------------------------
+@bot.tree.command(name="ping", description="Botun durumunu kontrol eder ve Aktif Geliştirici Rozetini tetikler.")
+async def ping(interaction: discord.Interaction):
+    await interaction.response.send_message("Pong! 🏓 Slash komutu çalıştı, rozet sistemine aktiflik kaydınız düşüldü!")
+
+# ---------------------------------------------------------
+# GEMINI İLE SOHBET ÖZETLEME KOMUTU (!ozet)
+# ---------------------------------------------------------
 @bot.command(name="ozet")
 async def ozet(ctx, saat: int = 2):
     if saat < 1 or saat > 5:
         await ctx.send("Lütfen 1 ile 5 arasında bir saat değeri girin (Örn: `!ozet 2`).")
         return
 
-    await ctx.send(f"⏳ Son {saat} saat içerisindeki sohbet hemmmmenn taranıyor✨...")
+    await ctx.send(f"⏳ Son {saat} saat içerisindeki sohbet Gemini ile taranıyor...")
 
     zaman_siniri = datetime.now(timezone.utc) - timedelta(hours=saat)
     mesaj_gecmisi = []
 
     try:
-        # Son mesajları çek
+        # Son mesajları kanaldan çek
         async for message in ctx.channel.history(limit=500, after=zaman_siniri):
             if message.author.bot:
                 continue
@@ -62,9 +78,8 @@ async def ozet(ctx, saat: int = 2):
         ozet_metni = None
         son_hata = None
 
-        # Modelleri sırayla dene ve 503 hatasında bekle
         for model_name in models_to_try:
-            for deneme in range(2): # Her model için 2 defa dene
+            for deneme in range(2):
                 try:
                     response = gemini_client.models.generate_content(
                         model=model_name,
@@ -75,7 +90,7 @@ async def ozet(ctx, saat: int = 2):
                 except Exception as e:
                     son_hata = e
                     if "503" in str(e):
-                        await asyncio.sleep(2) # 503 aldıysa 2 saniye bekle
+                        await asyncio.sleep(2)
                         continue
                     else:
                         break
