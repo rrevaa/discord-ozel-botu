@@ -9,6 +9,9 @@ from google import genai
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
+# Botun SADECE çalışacağı kanalın ID'si (Rakam olarak girin)
+IZINLI_KANAL_ID = 1368582404763156512  # <-- Buraya kendi kanal ID'nizi yapıştırın
+
 # Gemini istemcisini başlat
 gemini_client = genai.Client(api_key=GEMINI_KEY)
 
@@ -17,7 +20,6 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Bot hazır olduğunda çalışacak event
 @bot.event
 async def on_ready():
     print(f"✅ {bot.user} başarıyla bağlandı ve aktif!")
@@ -27,6 +29,11 @@ async def on_ready():
 # ---------------------------------------------------------
 @bot.command(name="ozet")
 async def ozet(ctx, saat: int = 2):
+    # Kanal Kontrolü: Komut izin verilen kanalda yazılmadıysa çalıştırma
+    if ctx.channel.id != IZINLI_KANAL_ID:
+        await ctx.send(f"⚠️ Bu komut sadece <#{IZINLI_KANAL_ID}> kanalında kullanılabilir!")
+        return
+
     # Limit 1 ile 12 saat arasında ayarlandı
     if saat < 1 or saat > 12:
         await ctx.send("Lütfen 1 ile 12 arasında bir saat değeri girin (Örn: `!ozet 6`).")
@@ -62,7 +69,6 @@ async def ozet(ctx, saat: int = 2):
             f"İşte son {saat} saatin sohbet geçmişi:\n\n{sohbet_metni}"
         )
 
-        # Kullanılabilecek TÜM Aktif Gemini Metin Modelleri (En hızlıdan en güçlüye)
         models_to_try = [
             "gemini-3.6-flash",
             "gemini-3.6-pro",
@@ -73,9 +79,8 @@ async def ozet(ctx, saat: int = 2):
         ozet_metni = None
         son_hata = None
 
-        # Modeller sırayla taranır
         for model_name in models_to_try:
-            for deneme in range(2): # Her model 2 kez denenir
+            for deneme in range(2):
                 try:
                     response = gemini_client.models.generate_content(
                         model=model_name,
@@ -83,17 +88,14 @@ async def ozet(ctx, saat: int = 2):
                     )
                     if response.text:
                         ozet_metni = response.text
-                        print(f"✅ Başarılı yanıt alınan model: {model_name}")
                         break
                 except Exception as e:
                     son_hata = e
-                    print(f"⚠️ {model_name} denenirken hata alındı: {e}")
-                    # Hata yoğunluk hatasıysa (503 veya 429) kısa bir süre bekleyip tekrar dene/diğer modele geç
                     if "503" in str(e) or "429" in str(e):
                         await asyncio.sleep(1.5)
                         continue
                     else:
-                        break # 404 gibi kalıcı hatalarda doğrudan sonraki modele geç
+                        break
             if ozet_metni:
                 break
 
@@ -108,6 +110,6 @@ async def ozet(ctx, saat: int = 2):
 
     except Exception as e:
         await ctx.send(f"Tüm modeller denendi ancak özet oluşturulamadı. Hata: `{e}`")
-        print(f"Son Hata detayı: {e}")
+        print(f"Hata detayı: {e}")
 
 bot.run(DISCORD_TOKEN)
