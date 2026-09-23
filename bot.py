@@ -1,17 +1,15 @@
 import os
+import asyncio
 import discord
 from discord.ext import commands
 from datetime import datetime, timedelta, timezone
 from google import genai
 
-# 1. API anahtarlarını ortam değişkenlerinden al
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
-# Gemini istemcisini başlat
 gemini_client = genai.Client(api_key=GEMINI_KEY)
 
-# Discord Bot izinlerini ayarla
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -26,13 +24,12 @@ async def ozet(ctx, saat: int = 2):
         await ctx.send("Lütfen 1 ile 5 arasında bir saat değeri girin (Örn: `!ozet 2`).")
         return
 
-    await ctx.send(f"⏳ Son {saat} saat içerisindeki sohbet taranıyor...")
+    await ctx.send(f"⏳ Son {saat} saat içerisindeki sohbet Gemini ile taranıyor...")
 
     zaman_siniri = datetime.now(timezone.utc) - timedelta(hours=saat)
     mesaj_gecmisi = []
 
     try:
-        # Son mesajları çek
         async for message in ctx.channel.history(limit=500, after=zaman_siniri):
             if message.author.bot:
                 continue
@@ -56,18 +53,29 @@ async def ozet(ctx, saat: int = 2):
             f"İşte son {saat} saatin sohbet geçmişi:\n\n{sohbet_metni}"
         )
 
-        # Güncel gemini-3.6-flash modeli kullanımı
-        response = gemini_client.models.generate_content(
-            model="gemini-3.6-flash",
-            contents=prompt
-        )
-        ozet_metni = response.text
+        # Sunucu yoğunluğuna karşı 3 defa otomatik deneme döngüsü
+        ozet_metni = None
+        for deneme in range(3):
+            try:
+                response = gemini_client.models.generate_content(
+                    model="gemini-3.6-flash",
+                    contents=prompt
+                )
+                ozet_metni = response.text
+                break
+            except Exception as e:
+                if "503" in str(e) and deneme < 2:
+                    await asyncio.sleep(2) # 2 saniye bekle ve tekrar dene
+                    continue
+                else:
+                    raise e
 
-        if len(ozet_metni) > 1900:
-            for chunk in [ozet_metni[i:i+1900] for i in range(0, len(ozet_metni), 1900)]:
-                await ctx.send(chunk)
-        else:
-            await ctx.send(f"📋 **Son {saat} Saatin Sohbet Özeti:**\n\n{ozet_metni}")
+        if ozet_metni:
+            if len(ozet_metni) > 1900:
+                for chunk in [ozet_metni[i:i+1900] for i in range(0, len(ozet_metni), 1900)]:
+                    await ctx.send(chunk)
+            else:
+                await ctx.send(f"📋 **Son {saat} Saatin Sohbet Özeti:**\n\n{ozet_metni}")
 
     except Exception as e:
         await ctx.send(f"Özet oluşturulurken bir hata oluştu. Hata: `{e}`")
