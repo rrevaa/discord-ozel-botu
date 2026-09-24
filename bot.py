@@ -7,20 +7,26 @@ from datetime import datetime, timedelta, timezone
 from google import genai
 from google.genai import types
 
+# ---------------------------------------------------------
+# 1. API VE KANAL AYARLARI
+# ---------------------------------------------------------
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
-HEDEF_KANAL_ID = 123456789012345678  # Özet için taranacak kanal ID
-KOMUT_KANAL_ID = 876543210987654321  # !ozet komutunun çalışacağı kanal ID
+# KANAL ID'LERİ (Kendi sunucunuzdaki ID'lerle değiştirin)
+HEDEF_KANAL_ID = 1368566503372492883  # Özet çıkarılacak sohbet kanalı
+KOMUT_KANAL_ID = 1368582404763156512  # !ozet komutunun çalışacağı kanal
 
-# SAMİMİ, DOĞAL VE İNSANSI KİŞİLİK TALİMATLARI
+# ---------------------------------------------------------
+# 2. SAMİMİ KİŞİLİK VE GÜVENLİK TALİMATLARI
+# ---------------------------------------------------------
 SISTEM_KURALLARI = """
 SENİN KİŞİLİĞİN VE KONUŞMA TARZIN:
 1. SAMİMİ VE DOĞAL OL: Resmi, robotik veya müşteri hizmetleri dilinden tamamen uzak dur. Bir arkadaşınla sohbet eder gibi rahat, sıcak ve doğal Türkçe konuş.
-2. GEREKSİZ SORU SORMA: Mesajlarının sonuna asla "Size nasıl yardımcı olabilirim?", "Başka bir sorunuz var mı?" gibi yapay kalıplar ekleme. Kullanıcı bir şey sorarsa cevapla, muhabbet ediyorsa muhabbet et.
-3. KISA VE CANLI CEVAPLAR: Uzun uzun nutuk çekme. Mesajların kısa, net ve akıcı olsun. Gerekirse hafif ve tatlı mizah/emoji kullanabilirsin ama abartma.
-4. GİZLİLİK VE GÜVENLİK: Telefon, TC, adres gibi kişisel verileri asla isteme ve paylaşma. Argo, küfür ve hakaret kesinlikle yasak.
-5. ALTYAPI GİZLİLİĞİ: Gemini, Google veya bir yapay zeka modeli olduğunu KESİNLİKLE söyleme. Sadece sunucudaki arkadaş canlısı bir üye/asistan gibi davran.
+2. GEREKSİZ SORU SORMA: Mesajlarının sonuna asla "Size nasıl yardımcı olabilirim?", "Başka bir sorunuz var mı?" gibi yapay kalıplar ekleme.
+3. KISA VE CANLI CEVAPLAR: Mesajların kısa, net ve akıcı olsun. Gerekmedikçe uzun paragraflar yazma.
+4. GİZLİLİK VE GÜVENLİK: Telefon, TC, adres, e-posta gibi kişisel verileri asla isteme ve paylaşma. Argo, küfür ve hakaret kesinlikle yasak.
+5. ALTYAPI GİZLİLİĞİ: Gemini, Google veya bir yapay zeka modeli olduğunu KESİNLİKLE söyleme. Sadece sunucudaki arkadaş canlısı bir üye gibi davran.
 """
 
 YASAKLI_KALIPLAR = [
@@ -45,6 +51,9 @@ def guvenlik_kontrolu(metin: str) -> bool:
             return False
     return True
 
+# ---------------------------------------------------------
+# 3. GEMINI VE DISCORD KURULUMU
+# ---------------------------------------------------------
 gemini_client = genai.Client(api_key=GEMINI_KEY)
 
 safety_settings = [
@@ -64,21 +73,23 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
-    print(f"✅ {bot.user} arkadaş canlısı kişiliğiyle hazır!")
+    print(f"✅ {bot.user} başarıyla bağlandı ve göreve hazır!")
 
 # ---------------------------------------------------------
-# DOĞAL SOHBET
+# 4. SAMİMİ VE DOĞAL SOHBET EVENT'İ (@mention)
 # ---------------------------------------------------------
 @bot.event
 async def on_message(message):
     if message.author.bot:
         return
 
+    # Komutların çalışabilmesi için şart
     await bot.process_commands(message)
 
     if message.content.startswith("!"):
         return
 
+    # Bota etiket atıldığında yanıt ver
     if bot.user.mentioned_in(message):
         async with message.channel.typing():
             temiz_mesaj = message.clean_content.replace(f"@{bot.user.name}", "").strip()
@@ -90,13 +101,12 @@ async def on_message(message):
                 return
 
             prompt = (
-                f"{SISTEM_KURALLARI}\n"
-                "GÖREV: Kullanıcının mesajına yukarıdaki samimi/insansı kişilik kurallarına uyarak cevap ver.\n"
-                "Sadece yazılan mesaja yanıt ver, ekstra 'Nasıl yardımcı olabilirim?' gibi kapanış cümleleri EKLEME.\n\n"
+                f"{SISTEM_KURALLARI}\n\n"
                 f"Kullanıcı mesajı: {temiz_mesaj}"
             )
 
-            models_to_try = ["gemini-3.6-flash", "gemini-1.5-flash", "gemini-3.6-pro"]
+            # Güncel ve hızlı modeller
+            models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash"]
             yanit_metni = None
 
             for model_name in models_to_try:
@@ -108,21 +118,22 @@ async def on_message(message):
                             contents=prompt,
                             config=types.GenerateContentConfig(safety_settings=safety_settings)
                         ),
-                        timeout=4.0
+                        timeout=10.0
                     )
                     if response.text:
                         yanit_metni = response.text
                         break
-                except Exception:
+                except Exception as e:
+                    print(f"Sohbet Model Hatası ({model_name}): {e}")
                     continue
 
             if yanit_metni:
                 await message.reply(yanit_metni)
             else:
-                await message.reply("Ufak bir dalgınlığıma geldi, ne diyordun tekrar söyler misin?")
+                await message.reply("Ufak bir bağlantı aksaması oldu, ne diyordun tekrar söyler misin?")
 
 # ---------------------------------------------------------
-# SOHBET ÖZETLEME
+# 5. SOHBET ÖZETLEME KOMUTU (!ozet)
 # ---------------------------------------------------------
 @bot.command(name="ozet")
 async def ozet(ctx, saat: int = 2):
@@ -131,7 +142,7 @@ async def ozet(ctx, saat: int = 2):
         return
 
     if saat < 1 or saat > 12:
-        await ctx.send("1 ile 12 saat arasında bir zaman seçsen daha iyi olur (Örn: `!ozet 4`).")
+        await ctx.send("1 ila 12 saat arasında bir zaman seçsen daha iyi olur (Örn: `!ozet 4`).")
         return
 
     hedef_kanal = bot.get_channel(HEDEF_KANAL_ID)
@@ -139,7 +150,7 @@ async def ozet(ctx, saat: int = 2):
         await ctx.send("Taranacak kanalı bulamadım, ID'yi kontrol edebilir misin?")
         return
 
-    await ctx.send(f"Göz atıyorum hemen, <#{HEDEF_KANAL_ID}> kanalındaki son {saat} saati inceliyorum...")
+    await ctx.send(f"Göz atıyorum hemen, <#{HEDEF_KANAL_ID}> kanalındaki son {saat} saati inceliyorum✨...")
 
     zaman_siniri = datetime.now(timezone.utc) - timedelta(hours=saat)
     mesaj_gecmisi = []
@@ -163,12 +174,12 @@ async def ozet(ctx, saat: int = 2):
             f"{SISTEM_KURALLARI}\n"
             "GÖREV: Sana verilen sohbet geçmişini samimi, anlaşılır ve tatlı bir dille özetle.\n"
             "KURALLAR:\n"
-            "1. Kullanıcıları etiketleme (@mention yapma), sadece isimlerini yaz.\n"
-            "2. Kimin ne konuştuğunu, öne çıkan ana konuları maddeler halinde rahat bir dille anlat.\n\n"
+            "1. Kullanıcıları etiketleme (@mention yapma), sadece isimlerini düz metin olarak yaz.\n"
+            "2. Önemli konuları ve öne çıkan sohbet başlıklarını maddeler halinde sun.\n\n"
             f"Son {saat} saatin sohbeti:\n\n{sohbet_metni}"
         )
 
-        models_to_try = ["gemini-3.6-flash", "gemini-1.5-flash", "gemini-3.6-pro"]
+        models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash"]
         ozet_metni = None
 
         for model_name in models_to_try:
@@ -180,12 +191,13 @@ async def ozet(ctx, saat: int = 2):
                         contents=prompt,
                         config=types.GenerateContentConfig(safety_settings=safety_settings)
                     ),
-                    timeout=8.0
+                    timeout=15.0
                 )
                 if response.text:
                     ozet_metni = response.text
                     break
-            except Exception:
+            except Exception as e:
+                print(f"Özet Model Hatası ({model_name}): {e}")
                 continue
 
         if ozet_metni:
@@ -193,11 +205,14 @@ async def ozet(ctx, saat: int = 2):
                 for chunk in [ozet_metni[i:i+1900] for i in range(0, len(ozet_metni), 1900)]:
                     await ctx.send(chunk)
             else:
-                await ctx.send(f"📋 **<#{HEDEF_KANAL_ID}> Kanalında Son {saat} Saatte Neler Olmuş Bakalım✨:**\n\n{ozet_metni}")
+                await ctx.send(f"📋 **<#{HEDEF_KANAL_ID}> Kanalında Son {saat} Saatte Neler Olmuş Bakalım:**\n\n{ozet_metni}")
         else:
             await ctx.send("Özeti çıkarırken ufak bir aksama oldu, tekrar dener misin?")
 
     except Exception as e:
         await ctx.send(f"Bir şeyler ters gitti: `{e}`")
 
+# ---------------------------------------------------------
+# 6. BOTU BAŞLAT
+# ---------------------------------------------------------
 bot.run(DISCORD_TOKEN)
