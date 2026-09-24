@@ -13,7 +13,6 @@ from google.genai import types
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
-# KANAL ID'LERİ (Kendi sunucunuzdaki ID'lerle değiştirin)
 HEDEF_KANAL_ID = 1368566503372492883  # Özet çıkarılacak sohbet kanalı
 KOMUT_KANAL_ID = 1368582404763156512  # !ozet komutunun çalışacağı kanal
 
@@ -56,17 +55,6 @@ def guvenlik_kontrolu(metin: str) -> bool:
 # ---------------------------------------------------------
 gemini_client = genai.Client(api_key=GEMINI_KEY)
 
-safety_settings = [
-    types.SafetySetting(
-        category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-        threshold=types.HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-    ),
-    types.SafetySetting(
-        category=types.HarmCategory.HARM_CATEGORY_HARASSMENT,
-        threshold=types.HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-    ),
-]
-
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -103,28 +91,27 @@ async def on_message(message):
                 f"Kullanıcı mesajı: {temiz_mesaj}"
             )
 
-            # Doğrudan aio (async) istemcisini kullanıyoruz
-            models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash"]
+            # Kararlı ve aktif API model isimleri
+            models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash"]
             yanit_metni = None
 
             for model_name in models_to_try:
                 try:
                     response = await gemini_client.aio.models.generate_content(
                         model=model_name,
-                        contents=prompt,
-                        config=types.GenerateContentConfig(safety_settings=safety_settings)
+                        contents=prompt
                     )
-                    if response.text:
+                    if response and response.text:
                         yanit_metni = response.text
                         break
                 except Exception as e:
-                    print(f"Sohbet Model Hatası ({model_name}): {e}")
+                    print(f"❌ Gemini API Hatanız ({model_name}): {e}")
                     continue
 
             if yanit_metni:
                 await message.reply(yanit_metni)
             else:
-                await message.reply("İnternetim anlık gitti geldi, naber?")
+                await message.reply("Biraz yoğunluk var galiba, tam anlayamadım tekrar söyler misin?")
 
 # ---------------------------------------------------------
 # 5. SOHBET ÖZETLEME KOMUTU (!ozet)
@@ -136,7 +123,7 @@ async def ozet(ctx, saat: int = 2):
         return
 
     if saat < 1 or saat > 12:
-        await ctx.send("1 ile 12 saat arasında bir zaman seçsen daha iyi olur (Örn: `!ozet 4`).")
+        await ctx.send("1 ila 12 saat arasında bir zaman seçsen daha iyi olur (Örn: `!ozet 4`).")
         return
 
     hedef_kanal = bot.get_channel(HEDEF_KANAL_ID)
@@ -173,21 +160,20 @@ async def ozet(ctx, saat: int = 2):
             f"Son {saat} saatin sohbeti:\n\n{sohbet_metni}"
         )
 
-        models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash"]
+        models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash"]
         ozet_metni = None
 
         for model_name in models_to_try:
             try:
                 response = await gemini_client.aio.models.generate_content(
                     model=model_name,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(safety_settings=safety_settings)
+                    contents=prompt
                 )
-                if response.text:
+                if response and response.text:
                     ozet_metni = response.text
                     break
             except Exception as e:
-                print(f"Özet Model Hatası ({model_name}): {e}")
+                print(f"❌ Özet Hatanız ({model_name}): {e}")
                 continue
 
         if ozet_metni:
