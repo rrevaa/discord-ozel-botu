@@ -83,13 +83,11 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    # Komutların çalışabilmesi için şart
     await bot.process_commands(message)
 
     if message.content.startswith("!"):
         return
 
-    # Bota etiket atıldığında yanıt ver
     if bot.user.mentioned_in(message):
         async with message.channel.typing():
             temiz_mesaj = message.clean_content.replace(f"@{bot.user.name}", "").strip()
@@ -105,20 +103,16 @@ async def on_message(message):
                 f"Kullanıcı mesajı: {temiz_mesaj}"
             )
 
-            # Güncel ve hızlı modeller
+            # Doğrudan aio (async) istemcisini kullanıyoruz
             models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash"]
             yanit_metni = None
 
             for model_name in models_to_try:
                 try:
-                    response = await asyncio.wait_for(
-                        asyncio.to_thread(
-                            gemini_client.models.generate_content,
-                            model=model_name,
-                            contents=prompt,
-                            config=types.GenerateContentConfig(safety_settings=safety_settings)
-                        ),
-                        timeout=10.0
+                    response = await gemini_client.aio.models.generate_content(
+                        model=model_name,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(safety_settings=safety_settings)
                     )
                     if response.text:
                         yanit_metni = response.text
@@ -130,7 +124,7 @@ async def on_message(message):
             if yanit_metni:
                 await message.reply(yanit_metni)
             else:
-                await message.reply("Ufak bir bağlantı aksaması oldu, ne diyordun tekrar söyler misin?")
+                await message.reply("İnternetim anlık gitti geldi, naber?")
 
 # ---------------------------------------------------------
 # 5. SOHBET ÖZETLEME KOMUTU (!ozet)
@@ -142,7 +136,7 @@ async def ozet(ctx, saat: int = 2):
         return
 
     if saat < 1 or saat > 12:
-        await ctx.send("1 ila 12 saat arasında bir zaman seçsen daha iyi olur (Örn: `!ozet 4`).")
+        await ctx.send("1 ile 12 saat arasında bir zaman seçsen daha iyi olur (Örn: `!ozet 4`).")
         return
 
     hedef_kanal = bot.get_channel(HEDEF_KANAL_ID)
@@ -184,14 +178,10 @@ async def ozet(ctx, saat: int = 2):
 
         for model_name in models_to_try:
             try:
-                response = await asyncio.wait_for(
-                    asyncio.to_thread(
-                        gemini_client.models.generate_content,
-                        model=model_name,
-                        contents=prompt,
-                        config=types.GenerateContentConfig(safety_settings=safety_settings)
-                    ),
-                    timeout=15.0
+                response = await gemini_client.aio.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(safety_settings=safety_settings)
                 )
                 if response.text:
                     ozet_metni = response.text
