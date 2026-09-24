@@ -1,29 +1,31 @@
-name: Discord Bot Server
+name: Discord Bot
 
 on:
+  workflow_dispatch: # Manuel başlatma butonu
   schedule:
+    # Her 5 saatte bir botu otomatik olarak yeniden başlatır (Kesintisiz döngü)
     - cron: '0 */5 * * *'
-  workflow_dispatch:
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Kodu Cek
+      - name: Kodu Çek
         uses: actions/checkout@v4
 
       - name: Python Kur
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
 
-      - name: Kutuphaneleri Kur
+      - name: Kütüphaneleri Yükle
         run: |
-          pip install discord.py google-genai flask
+          python -m pip install --upgrade pip
+          pip install discord.py google-genai
 
-      - name: Botu Calistir
+      - name: Botu Başlat
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
-        run: |
-          python bot.py
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python bot.py
