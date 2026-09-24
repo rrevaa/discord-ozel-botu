@@ -4,7 +4,8 @@ import asyncio
 import discord
 from discord.ext import commands
 from datetime import datetime, timedelta, timezone
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 # ---------------------------------------------------------
 # 1. API VE KANAL AYARLARI
@@ -12,11 +13,8 @@ import google.generativeai as genai
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
-HEDEF_KANAL_ID = 1368566503372492883  # Kendi Kanal ID'niz
-KOMUT_KANAL_ID = 1368582404763156512  # Kendi Komut Kanal ID'niz
-
-# Google Gemini Yapılandırması
-genai.configure(api_key=GEMINI_KEY)
+HEDEF_KANAL_ID = 123456789012345678  # Özet çıkarılacak sohbet kanalı
+KOMUT_KANAL_ID = 876543210987654321  # !ozet komutunun çalışacağı kanal
 
 # ---------------------------------------------------------
 # 2. SAMİMİ KİŞİLİK VE GÜVENLİK TALİMATLARI
@@ -24,7 +22,7 @@ genai.configure(api_key=GEMINI_KEY)
 SISTEM_KURALLARI = """
 SENİN KİŞİLİĞİN VE KONUŞMA TARZIN:
 1. SAMİMİ VE DOĞAL OL: Resmi, robotik veya müşteri hizmetleri dilinden tamamen uzak dur. Bir arkadaşınla sohbet eder gibi rahat, sıcak ve doğal Türkçe konuş.
-2. GEREKSİZ SORU SORMA: Mesajlarının sonuna asla "Size nasıl yardımcı olabilirim?", "Başka bir sorunuz var mı?" gibi yapay kalıplar ekleme.
+2. GEREKSİZ SORU SORMA: Mesajlarının sonuna asla "Size nasıl yardımcı olabilirim?", "Başka bir sorunuz var mı?" gibi yapay kalıplar ekleme. Kullanıcı bir şey sorarsa cevapla, muhabbet ediyorsa muhabbet et.
 3. KISA VE CANLI CEVAPLAR: Mesajların kısa, net ve akıcı olsun. Gerekmedikçe uzun paragraflar yazma.
 4. GİZLİLİK VE GÜVENLİK: Telefon, TC, adres, e-posta gibi kişisel verileri asla isteme ve paylaşma. Argo, küfür ve hakaret kesinlikle yasak.
 5. ALTYAPI GİZLİLİĞİ: Gemini, Google veya bir yapay zeka modeli olduğunu KESİNLİKLE söyleme. Sadece sunucudaki arkadaş canlısı bir üye gibi davran.
@@ -53,8 +51,10 @@ def guvenlik_kontrolu(metin: str) -> bool:
     return True
 
 # ---------------------------------------------------------
-# 3. DISCORD KURULUMU
+# 3. GEMINI VE DISCORD KURULUMU
 # ---------------------------------------------------------
+gemini_client = genai.Client(api_key=GEMINI_KEY)
+
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -86,26 +86,34 @@ async def on_message(message):
                 await message.reply("Bu tür konulara pek girmeyelim derim 🙂")
                 return
 
-            prompt = f"{SISTEM_KURALLARI}\n\nKullanıcı mesajı: {temiz_mesaj}"
+            full_prompt = f"{SISTEM_KURALLARI}\n\nKullanıcı: {temiz_mesaj}\nSen:"
 
-            models_to_try = ["gemini-1.5-flash", "gemini-pro"]
+            models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash"]
             yanit_metni = None
 
             for model_name in models_to_try:
                 try:
-                    model = genai.GenerativeModel(model_name)
-                    response = await asyncio.to_thread(model.generate_content, prompt)
+                    # Thread executor ile senkron istemciyi bloklamadan çalıştırıyoruz
+                    loop = asyncio.get_running_loop()
+                    response = await loop.run_in_executor(
+                        None,
+                        lambda m=model_name: gemini_client.models.generate_content(
+                            model=m,
+                            contents=full_prompt
+                        )
+                    )
+                    
                     if response and response.text:
-                        yanit_metni = response.text
+                        yanit_metni = response.text.strip()
                         break
                 except Exception as e:
-                    print(f"❌ Gemini Sohbet Hatası [{model_name}]: {e}")
+                    print(f"❌ Model Denemesi Hata Alındı ({model_name}): {e}")
                     continue
 
             if yanit_metni:
                 await message.reply(yanit_metni)
             else:
-                await message.reply("Ufak bir aksama oldu, ne diyordun tekrar söyler misin?")
+                await message.reply("Gözümden kaçtı galiba, bir daha desene?")
 
 # ---------------------------------------------------------
 # 5. SOHBET ÖZETLEME KOMUTU (!ozet)
@@ -117,7 +125,7 @@ async def ozet(ctx, saat: int = 2):
         return
 
     if saat < 1 or saat > 12:
-        await ctx.send("1 ila 12 saat arasında bir zaman seçsen daha iyi olur (Örn: `!ozet 4`).")
+        await ctx.send("1 ile 12 saat arasında bir zaman seçsen daha iyi olur (Örn: `!ozet 4`).")
         return
 
     hedef_kanal = bot.get_channel(HEDEF_KANAL_ID)
@@ -125,7 +133,7 @@ async def ozet(ctx, saat: int = 2):
         await ctx.send("Taranacak kanalı bulamadım, ID'yi kontrol edebilir misin?")
         return
 
-    await ctx.send(f"Göz atıyorum hemen, <#{HEDEF_KANAL_ID}> kanalındaki son {saat} saati inceliyorum✨...")
+    await ctx.send(f"Göz atıyorum hemen, <#{HEDEF_KANAL_ID}> kanalındaki son {saat} saati inceliyorum...")
 
     zaman_siniri = datetime.now(timezone.utc) - timedelta(hours=saat)
     mesaj_gecmisi = []
@@ -154,18 +162,24 @@ async def ozet(ctx, saat: int = 2):
             f"Son {saat} saatin sohbeti:\n\n{sohbet_metni}"
         )
 
-        models_to_try = ["gemini-1.5-flash", "gemini-pro"]
+        models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash"]
         ozet_metni = None
 
         for model_name in models_to_try:
             try:
-                model = genai.GenerativeModel(model_name)
-                response = await asyncio.to_thread(model.generate_content, prompt)
+                loop = asyncio.get_running_loop()
+                response = await loop.run_in_executor(
+                    None,
+                    lambda m=model_name: gemini_client.models.generate_content(
+                        model=m,
+                        contents=prompt
+                    )
+                )
                 if response and response.text:
-                    ozet_metni = response.text
+                    ozet_metni = response.text.strip()
                     break
             except Exception as e:
-                print(f"❌ Özet Hatası [{model_name}]: {e}")
+                print(f"❌ Özet Hatası ({model_name}): {e}")
                 continue
 
         if ozet_metni:
