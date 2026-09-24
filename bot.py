@@ -4,7 +4,7 @@ import asyncio
 import discord
 from discord.ext import commands
 from datetime import datetime, timedelta, timezone
-from google import genai
+import google.generativeai as genai
 
 # ---------------------------------------------------------
 # 1. API VE KANAL AYARLARI
@@ -12,8 +12,11 @@ from google import genai
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
-HEDEF_KANAL_ID = 1368566503372492883  # Özet çıkarılacak sohbet kanalı
-KOMUT_KANAL_ID = 1368582404763156512  # !ozet komutunun çalışacağı kanal
+HEDEF_KANAL_ID = 1368566503372492883  # Kendi Kanal ID'niz
+KOMUT_KANAL_ID = 1368582404763156512  # Kendi Komut Kanal ID'niz
+
+# Google Gemini Yapılandırması
+genai.configure(api_key=GEMINI_KEY)
 
 # ---------------------------------------------------------
 # 2. SAMİMİ KİŞİLİK VE GÜVENLİK TALİMATLARI
@@ -50,10 +53,8 @@ def guvenlik_kontrolu(metin: str) -> bool:
     return True
 
 # ---------------------------------------------------------
-# 3. GEMINI VE DISCORD KURULUMU
+# 3. DISCORD KURULUMU
 # ---------------------------------------------------------
-gemini_client = genai.Client(api_key=GEMINI_KEY)
-
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -87,20 +88,13 @@ async def on_message(message):
 
             prompt = f"{SISTEM_KURALLARI}\n\nKullanıcı mesajı: {temiz_mesaj}"
 
-            models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash"]
+            models_to_try = ["gemini-1.5-flash", "gemini-pro"]
             yanit_metni = None
 
             for model_name in models_to_try:
                 try:
-                    # Senkron çağrıyı asyncio executor ile güvenli çalıştırma
-                    loop = asyncio.get_running_loop()
-                    response = await loop.run_in_executor(
-                        None,
-                        lambda: gemini_client.models.generate_content(
-                            model=model_name,
-                            contents=prompt
-                        )
-                    )
+                    model = genai.GenerativeModel(model_name)
+                    response = await asyncio.to_thread(model.generate_content, prompt)
                     if response and response.text:
                         yanit_metni = response.text
                         break
@@ -111,7 +105,7 @@ async def on_message(message):
             if yanit_metni:
                 await message.reply(yanit_metni)
             else:
-                await message.reply("Aksama oldu, tekrar yazar mısın?")
+                await message.reply("Ufak bir aksama oldu, ne diyordun tekrar söyler misin?")
 
 # ---------------------------------------------------------
 # 5. SOHBET ÖZETLEME KOMUTU (!ozet)
@@ -160,19 +154,13 @@ async def ozet(ctx, saat: int = 2):
             f"Son {saat} saatin sohbeti:\n\n{sohbet_metni}"
         )
 
-        models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash"]
+        models_to_try = ["gemini-1.5-flash", "gemini-pro"]
         ozet_metni = None
 
         for model_name in models_to_try:
             try:
-                loop = asyncio.get_running_loop()
-                response = await loop.run_in_executor(
-                    None,
-                    lambda: gemini_client.models.generate_content(
-                        model=model_name,
-                        contents=prompt
-                    )
-                )
+                model = genai.GenerativeModel(model_name)
+                response = await asyncio.to_thread(model.generate_content, prompt)
                 if response and response.text:
                     ozet_metni = response.text
                     break
