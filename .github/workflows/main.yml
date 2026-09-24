@@ -1,9 +1,8 @@
 name: Discord Bot
 
 on:
-  workflow_dispatch: # Manuel başlatma butonu
+  workflow_dispatch:
   schedule:
-    # Her 5 saatte bir botu otomatik olarak yeniden başlatır (Kesintisiz döngü)
     - cron: '0 */5 * * *'
 
 jobs:
@@ -22,7 +21,7 @@ jobs:
       - name: Kütüphaneleri Yükle
         run: |
           python -m pip install --upgrade pip
-          pip install discord.py google-genai
+          pip install discord.py google-generativeai
 
       - name: Botu Başlat
         env:
