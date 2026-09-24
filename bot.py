@@ -4,16 +4,20 @@ import asyncio
 import discord
 from discord.ext import commands
 from datetime import datetime, timedelta, timezone
-from google import genai
+from groq import Groq
 
 # ---------------------------------------------------------
 # 1. API VE KANAL AYARLARI
 # ---------------------------------------------------------
-GEMINI_KEY = os.getenv("GEMINI_API_KEY")
+GROQ_KEY = os.getenv("GROQ_API_KEY")
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
-HEDEF_KANAL_ID = 123456789012345678  # Özet çıkarılacak sohbet kanalı
-KOMUT_KANAL_ID = 876543210987654321  # !ozet komutunun çalışacağı kanal
+# Kendi sunucunuzdaki kanal ID'leri ile değiştirin
+HEDEF_KANAL_ID = 123456789012345678  # Özet çıkarılacak kanal ID'si
+KOMUT_KANAL_ID = 876543210987654321  # !ozet komutunun çalışacağı kanal ID'si
+
+# Groq İstemcisi
+groq_client = Groq(api_key=GROQ_KEY)
 
 # ---------------------------------------------------------
 # 2. SAMİMİ KİŞİLİK VE GÜVENLİK TALİMATLARI
@@ -21,15 +25,15 @@ KOMUT_KANAL_ID = 876543210987654321  # !ozet komutunun çalışacağı kanal
 SISTEM_KURALLARI = """
 SENİN KİŞİLİĞİN VE KONUŞMA TARZIN:
 1. SAMİMİ VE DOĞAL OL: Resmi, robotik veya müşteri hizmetleri dilinden tamamen uzak dur. Bir arkadaşınla sohbet eder gibi rahat, sıcak ve doğal Türkçe konuş.
-2. GEREKSİZ SORU SORMA: Mesajlarının sonuna asla "Size nasıl yardımcı olabilirim?", "Başka bir sorunuz var mı?" gibi yapay kalıplar ekleme.
+2. GEREKSİZ SORU SORMA: Mesajlarının sonuna asla "Size nasıl yardımcı olabilirim?", "Başka bir sorunuz var mı?" gibi yapay kalıplar ekleme. Kullanıcı bir şey sorarsa cevapla, muhabbet ediyorsa muhabbet et.
 3. KISA VE CANLI CEVAPLAR: Mesajların kısa, net ve akıcı olsun. Gerekmedikçe uzun paragraflar yazma.
 4. GİZLİLİK VE GÜVENLİK: Telefon, TC, adres, e-posta gibi kişisel verileri asla isteme ve paylaşma. Argo, küfür ve hakaret kesinlikle yasak.
-5. ALTYAPI GİZLİLİĞİ: Gemini, Google veya bir yapay zeka modeli olduğunu KESİNLİKLE söyleme. Sadece sunucudaki arkadaş canlısı bir üye gibi davran.
+5. ALTYAPI GİZLİLİĞİ: Llama, Groq, Meta, OpenAI veya bir yapay zeka modeli olduğunu KESİNLİKLE söyleme. Sadece sunucudaki arkadaş canlısı bir üye gibi davran.
 """
 
 YASAKLI_KALIPLAR = [
     r"ignore previous instructions", r"prompt'u göster", r"sistem komutları",
-    r"hangi modeli kullanıyorsun", r"gemini misin", r"google yapay zeka",
+    r"hangi modeli kullanıyorsun", r"llama mısın", r"groq nedir",
     r"kuralları unut", r"jailbreak", r"system prompt", r"seni kim yarattı"
 ]
 
@@ -50,28 +54,30 @@ def guvenlik_kontrolu(metin: str) -> bool:
     return True
 
 # ---------------------------------------------------------
-# 3. GEMINI VE DISCORD KURULUMU
+# 3. DISCORD VE GROQ SOHBET FONKSİYONU
 # ---------------------------------------------------------
-gemini_client = genai.Client(api_key=GEMINI_KEY)
-
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
-    print(f"✅ {bot.user} başarıyla bağlandı ve göreve hazır!")
+    print(f"✅ {bot.user} Groq (Llama 3.3) altyapısıyla başarıyla bağlandı!")
 
-# Senkron Gemini çağrısını ayrı thread üzerinde güvenle çalıştırma
-def ask_gemini(model_name: str, prompt_text: str):
-    res = gemini_client.models.generate_content(
-        model=model_name,
-        contents=prompt_text
+def ask_groq(user_message: str, system_prompt: str = SISTEM_KURALLARI) -> str:
+    completion = groq_client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message}
+        ],
+        temperature=0.7,
+        max_tokens=1000,
     )
-    return res.text if res else None
+    return completion.choices[0].message.content
 
 # ---------------------------------------------------------
-# 4. SAMİMİ VE DOĞAL SOHBET EVENT'İ (@mention)
+# 4. SOHBET EVENT'İ (@mention)
 # ---------------------------------------------------------
 @bot.event
 async def on_message(message):
@@ -93,24 +99,15 @@ async def on_message(message):
                 await message.reply("Bu tür konulara pek girmeyelim derim 🙂")
                 return
 
-            full_prompt = f"{SISTEM_KURALLARI}\n\nKullanıcı: {temiz_mesaj}\nSen:"
-            models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash"]
-            yanit_metni = None
-
-            for model_name in models_to_try:
-                try:
-                    yanit_metni = await asyncio.to_thread(ask_gemini, model_name, full_prompt)
-                    if yanit_metni:
-                        yanit_metni = yanit_metni.strip()
-                        break
-                except Exception as e:
-                    print(f"❌ DETAYLI GEMINI HATASI [{model_name}]: {e}")
-                    continue
-
-            if yanit_metni:
-                await message.reply(yanit_metni)
-            else:
-                await message.reply("Gözümden kaçtı galiba, bir daha desene?")
+            try:
+                yanit = await asyncio.to_thread(ask_groq, temiz_mesaj)
+                if yanit:
+                    await message.reply(yanit)
+                else:
+                    await message.reply("Gözümden kaçtı galiba, bir daha desene?")
+            except Exception as e:
+                print(f"❌ Groq API Hatası: {e}")
+                await message.reply("Ufak bir aksama oldu, tekrar yazar mısın?")
 
 # ---------------------------------------------------------
 # 5. SOHBET ÖZETLEME KOMUTU (!ozet)
@@ -151,7 +148,6 @@ async def ozet(ctx, saat: int = 2):
         sohbet_metni = "\n".join(mesaj_gecmisi)
 
         prompt = (
-            f"{SISTEM_KURALLARI}\n"
             "GÖREV: Sana verilen sohbet geçmişini samimi, anlaşılır ve tatlı bir dille özetle.\n"
             "KURALLAR:\n"
             "1. Kullanıcıları etiketleme (@mention yapma), sadece isimlerini düz metin olarak yaz.\n"
@@ -159,18 +155,7 @@ async def ozet(ctx, saat: int = 2):
             f"Son {saat} saatin sohbeti:\n\n{sohbet_metni}"
         )
 
-        models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash"]
-        ozet_metni = None
-
-        for model_name in models_to_try:
-            try:
-                ozet_metni = await asyncio.to_thread(ask_gemini, model_name, prompt)
-                if ozet_metni:
-                    ozet_metni = ozet_metni.strip()
-                    break
-            except Exception as e:
-                print(f"❌ Özet Hatası [{model_name}]: {e}")
-                continue
+        ozet_metni = await asyncio.to_thread(ask_groq, prompt)
 
         if ozet_metni:
             if len(ozet_metni) > 1900:
