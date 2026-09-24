@@ -12,7 +12,6 @@ from google import genai
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
-# KANAL ID'LERİ (Kendi sunucunuzdaki ID'lerle değiştirin)
 HEDEF_KANAL_ID = 123456789012345678  # Özet çıkarılacak sohbet kanalı
 KOMUT_KANAL_ID = 876543210987654321  # !ozet komutunun çalışacağı kanal
 
@@ -22,7 +21,7 @@ KOMUT_KANAL_ID = 876543210987654321  # !ozet komutunun çalışacağı kanal
 SISTEM_KURALLARI = """
 SENİN KİŞİLİĞİN VE KONUŞMA TARZIN:
 1. SAMİMİ VE DOĞAL OL: Resmi, robotik veya müşteri hizmetleri dilinden tamamen uzak dur. Bir arkadaşınla sohbet eder gibi rahat, sıcak ve doğal Türkçe konuş.
-2. GEREKSİZ SORU SORMA: Mesajlarının sonuna asla "Size nasıl yardımcı olabilirim?", "Başka bir sorunuz var mı?" gibi yapay kalıplar ekleme. Kullanıcı bir şey sorarsa cevapla, muhabbet ediyorsa muhabbet et.
+2. GEREKSİZ SORU SORMA: Mesajlarının sonuna asla "Size nasıl yardımcı olabilirim?", "Başka bir sorunuz var mı?" gibi yapay kalıplar ekleme.
 3. KISA VE CANLI CEVAPLAR: Mesajların kısa, net ve akıcı olsun. Gerekmedikçe uzun paragraflar yazma.
 4. GİZLİLİK VE GÜVENLİK: Telefon, TC, adres, e-posta gibi kişisel verileri asla isteme ve paylaşma. Argo, küfür ve hakaret kesinlikle yasak.
 5. ALTYAPI GİZLİLİĞİ: Gemini, Google veya bir yapay zeka modeli olduğunu KESİNLİKLE söyleme. Sadece sunucudaki arkadaş canlısı bir üye gibi davran.
@@ -63,6 +62,14 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 async def on_ready():
     print(f"✅ {bot.user} başarıyla bağlandı ve göreve hazır!")
 
+# Senkron Gemini çağrısını ayrı thread üzerinde güvenle çalıştırma
+def ask_gemini(model_name: str, prompt_text: str):
+    res = gemini_client.models.generate_content(
+        model=model_name,
+        contents=prompt_text
+    )
+    return res.text if res else None
+
 # ---------------------------------------------------------
 # 4. SAMİMİ VE DOĞAL SOHBET EVENT'İ (@mention)
 # ---------------------------------------------------------
@@ -87,26 +94,17 @@ async def on_message(message):
                 return
 
             full_prompt = f"{SISTEM_KURALLARI}\n\nKullanıcı: {temiz_mesaj}\nSen:"
-
             models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash"]
             yanit_metni = None
 
             for model_name in models_to_try:
                 try:
-                    loop = asyncio.get_running_loop()
-                    response = await loop.run_in_executor(
-                        None,
-                        lambda m=model_name: gemini_client.models.generate_content(
-                            model=m,
-                            contents=full_prompt
-                        )
-                    )
-                    
-                    if response and response.text:
-                        yanit_metni = response.text.strip()
+                    yanit_metni = await asyncio.to_thread(ask_gemini, model_name, full_prompt)
+                    if yanit_metni:
+                        yanit_metni = yanit_metni.strip()
                         break
                 except Exception as e:
-                    print(f"❌ Model Hatası ({model_name}): {e}")
+                    print(f"❌ DETAYLI GEMINI HATASI [{model_name}]: {e}")
                     continue
 
             if yanit_metni:
@@ -166,19 +164,12 @@ async def ozet(ctx, saat: int = 2):
 
         for model_name in models_to_try:
             try:
-                loop = asyncio.get_running_loop()
-                response = await loop.run_in_executor(
-                    None,
-                    lambda m=model_name: gemini_client.models.generate_content(
-                        model=m,
-                        contents=prompt
-                    )
-                )
-                if response and response.text:
-                    ozet_metni = response.text.strip()
+                ozet_metni = await asyncio.to_thread(ask_gemini, model_name, prompt)
+                if ozet_metni:
+                    ozet_metni = ozet_metni.strip()
                     break
             except Exception as e:
-                print(f"❌ Özet Hatası ({model_name}): {e}")
+                print(f"❌ Özet Hatası [{model_name}]: {e}")
                 continue
 
         if ozet_metni:
