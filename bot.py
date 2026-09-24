@@ -10,8 +10,8 @@ GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
 # KANAL ID'LERİNİ BURAYA GİRİN (Rakam olarak yazın)
-HEDEF_KANAL_ID = 123456789012345678  # Mesajları taranacak kanal (Örn: Genel Chat)
-KOMUT_KANAL_ID = 876543210987654321  # Komutun çalışacağı kanal (Örn: Bot Komut Chati)
+HEDEF_KANAL_ID = 1368566503372492883  # Mesajları taranacak kanal (Örn: Genel Chat)
+KOMUT_KANAL_ID = 1368582404763156512  # Komutun çalışacağı kanal (Örn: Bot Komut Chati)
 
 # Gemini istemcisini başlat
 gemini_client = genai.Client(api_key=GEMINI_KEY)
@@ -37,7 +37,7 @@ async def ozet(ctx, saat: int = 2):
 
     # Limit 1 ile 12 saat arasında ayarlandı
     if saat < 1 or saat > 12:
-        await ctx.send("Lütfen 1 ile 12 arasında bir saat değeri girin (Örn: `!ozet 6`).")
+        await ctx.send("Lütfen 1 ila 12 arasında bir saat değeri girin (Örn: `!ozet 6`).")
         return
 
     # Taranacak hedef kanalı Discord üzerinden bul
@@ -46,7 +46,7 @@ async def ozet(ctx, saat: int = 2):
         await ctx.send("⚠️ Taranacak hedef kanal bulunamadı! Lütfen kanal ID'sini kontrol edin.")
         return
 
-    await ctx.send(f"⏳ <#{HEDEF_KANAL_ID}> kanalındaki son {saat} saatlik sohbet taranıyor...")
+    await ctx.send(f"⏳ <#{HEDEF_KANAL_ID}> kanalındaki son {saat} saatlik sohbet taranıyor✨...")
 
     zaman_siniri = datetime.now(timezone.utc) - timedelta(hours=saat)
     mesaj_gecmisi = []
