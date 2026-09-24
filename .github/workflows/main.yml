@@ -1,9 +1,8 @@
 name: Discord Bot
 
 on:
-  workflow_dispatch: # Manuel başlatma butonu
+  workflow_dispatch:
   schedule:
-    # Her 5 saatte bir botu otomatik olarak yeniden başlatır (Kesintisiz döngü)
     - cron: '0 */5 * * *'
 
 jobs:
@@ -22,10 +21,10 @@ jobs:
       - name: Kütüphaneleri Yükle
         run: |
           python -m pip install --upgrade pip
-          pip install discord.py google-genai
+          pip install discord.py groq
 
       - name: Botu Başlat
         env:
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: python bot.py
