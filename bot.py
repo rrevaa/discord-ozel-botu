@@ -13,10 +13,9 @@ GROQ_KEY = os.getenv("GROQ_API_KEY")
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
 # Kendi sunucunuzdaki kanal ID'leri ile değiştirin
-HEDEF_KANAL_ID = 123456789012345678  # Özet çıkarılacak kanal ID'si
-KOMUT_KANAL_ID = 876543210987654321  # !ozet komutunun çalışacağı kanal ID'si
+HEDEF_KANAL_ID = 123456789012345678  # Özet çıkarılacak sohbet kanalı
+KOMUT_KANAL_ID = 876543210987654321  # !ozet komutunun çalışacağı kanal
 
-# Groq İstemcisi
 groq_client = Groq(api_key=GROQ_KEY)
 
 # ---------------------------------------------------------
@@ -54,7 +53,7 @@ def guvenlik_kontrolu(metin: str) -> bool:
     return True
 
 # ---------------------------------------------------------
-# 3. DISCORD VE GROQ SOHBET FONKSİYONU
+# 3. DISCORD KURULUMU VE EVENT DİNLENMESİ
 # ---------------------------------------------------------
 intents = discord.Intents.default()
 intents.message_content = True
@@ -65,10 +64,14 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
-    print(f"✅ {bot.user} BAŞARIYLA BAĞLANDI VE ÇALIŞIYOR!")
-    print(f"Bot ID: {bot.user.id}")
+    print("--------------------------------------------------")
+    print(f"✅ BOT BAŞARIYLA SİSTEME GİRİŞ YAPTI: {bot.user}")
+    print(f"✅ BAGLI OLDUGU SUNUCULAR ({len(bot.guilds)} adet):")
+    for guild in bot.guilds:
+        print(f"   - {guild.name} (ID: {guild.id})")
+    print("--------------------------------------------------")
 
-def ask_groq(user_message: str, system_prompt: str = SISTEM_KURALLARI) -> str:
+def ask_groq_sync(user_message: str, system_prompt: str = SISTEM_KURALLARI) -> str:
     completion = groq_client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[
@@ -88,50 +91,43 @@ async def on_message(message):
     if message.author.bot:
         return
 
+    print(f"📩 MESAJ ALINDI: [{message.author}] -> {message.content}")
+
     await bot.process_commands(message)
 
     if message.content.startswith("!"):
         return
 
     if bot.user.mentioned_in(message):
-        async with message.channel.typing():
-            temiz_mesaj = message.clean_content.replace(f"@{bot.user.name}", "").strip()
-            if not temiz_mesaj:
-                temiz_mesaj = "Selam!"
+        temiz_mesaj = message.clean_content.replace(f"@{bot.user.name}", "").strip()
+        if not temiz_mesaj:
+            temiz_mesaj = "Selam!"
 
-            if not guvenlik_kontrolu(temiz_mesaj):
-                await message.reply("Bu tür konulara pek girmeyelim derim 🙂")
-                return
+        if not guvenlik_kontrolu(temiz_mesaj):
+            await message.reply("Bu tür konulara pek girmeyelim derim 🙂")
+            return
 
-            try:
-                yanit = await asyncio.to_thread(ask_groq, temiz_mesaj)
-                if yanit:
-                    await message.reply(yanit)
-                else:
-                    await message.reply("Gözümden kaçtı galiba, bir daha desene?")
-            except Exception as e:
-                print(f"❌ Groq API Hatası: {e}")
-                await message.reply("Ufak bir aksama oldu, tekrar yazar mısın?")
+        try:
+            yanit = await asyncio.to_thread(ask_groq_sync, temiz_mesaj)
+            if yanit:
+                await message.reply(yanit)
+            else:
+                await message.reply("Gözümden kaçtı galiba, bir daha desene?")
+        except Exception as e:
+            print(f"❌ Groq API Çağrı Hatası: {e}")
+            await message.reply("Ufak bir aksama oldu, tekrar yazar mısın?")
 
 # ---------------------------------------------------------
 # 5. SOHBET ÖZETLEME KOMUTU (!ozet)
 # ---------------------------------------------------------
 @bot.command(name="ozet")
 async def ozet(ctx, saat: int = 2):
-    if ctx.channel.id != KOMUT_KANAL_ID:
-        await ctx.send(f"Bu komutu sadece <#{KOMUT_KANAL_ID}> kanalında kullanabilirsin 🙂")
-        return
-
     if saat < 1 or saat > 12:
         await ctx.send("1 ile 12 saat arasında bir zaman seçsen daha iyi olur (Örn: `!ozet 4`).")
         return
 
-    hedef_kanal = bot.get_channel(HEDEF_KANAL_ID)
-    if not hedef_kanal:
-        await ctx.send("Taranacak kanalı bulamadım, ID'yi kontrol edebilir misin?")
-        return
-
-    await ctx.send(f"Göz atıyorum hemen, <#{HEDEF_KANAL_ID}> kanalındaki son {saat} saati inceliyorum...")
+    hedef_kanal = bot.get_channel(HEDEF_KANAL_ID) or ctx.channel
+    await ctx.send(f"Göz atıyorum hemen, <#{hedef_kanal.id}> kanalındaki son {saat} saati inceliyorum...")
 
     zaman_siniri = datetime.now(timezone.utc) - timedelta(hours=saat)
     mesaj_gecmisi = []
@@ -146,7 +142,7 @@ async def ozet(ctx, saat: int = 2):
                 mesaj_gecmisi.append(f"{yazan}: {icerik}")
 
         if not mesaj_gecmisi:
-            await ctx.send(f"<#{HEDEF_KANAL_ID}> kanalında son {saat} saatte pek bir şey konuşulmamış sanki.")
+            await ctx.send(f"<#{hedef_kanal.id}> kanalında son {saat} saatte pek bir şey konuşulmamış sanki.")
             return
 
         sohbet_metni = "\n".join(mesaj_gecmisi)
@@ -159,14 +155,14 @@ async def ozet(ctx, saat: int = 2):
             f"Son {saat} saatin sohbeti:\n\n{sohbet_metni}"
         )
 
-        ozet_metni = await asyncio.to_thread(ask_groq, prompt)
+        ozet_metni = await asyncio.to_thread(ask_groq_sync, prompt)
 
         if ozet_metni:
             if len(ozet_metni) > 1900:
                 for chunk in [ozet_metni[i:i+1900] for i in range(0, len(ozet_metni), 1900)]:
                     await ctx.send(chunk)
             else:
-                await ctx.send(f"📋 **<#{HEDEF_KANAL_ID}> Kanalında Son {saat} Saatte Neler Olmuş Bakalım:**\n\n{ozet_metni}")
+                await ctx.send(f"📋 **<#{hedef_kanal.id}> Kanalında Son {saat} Saatte Neler Olmuş Bakalım:**\n\n{ozet_metni}")
         else:
             await ctx.send("Özeti çıkarırken ufak bir aksama oldu, tekrar dener misin?")
 
