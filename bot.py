@@ -58,11 +58,15 @@ def guvenlik_kontrolu(metin: str) -> bool:
 # ---------------------------------------------------------
 intents = discord.Intents.default()
 intents.message_content = True
+intents.guilds = True
+intents.messages = True
+
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
-    print(f"✅ {bot.user} Groq (Llama 3.3) altyapısıyla başarıyla bağlandı!")
+    print(f"✅ {bot.user} BAŞARIYLA BAĞLANDI VE ÇALIŞIYOR!")
+    print(f"Bot ID: {bot.user.id}")
 
 def ask_groq(user_message: str, system_prompt: str = SISTEM_KURALLARI) -> str:
     completion = groq_client.chat.completions.create(
