@@ -5,7 +5,6 @@ import discord
 from discord.ext import commands
 from datetime import datetime, timedelta, timezone
 from google import genai
-from google.genai import types
 
 # ---------------------------------------------------------
 # 1. API VE KANAL AYARLARI
@@ -13,6 +12,7 @@ from google.genai import types
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
+# KANAL ID'LERİ (Kendi sunucunuzdaki ID'lerle değiştirin)
 HEDEF_KANAL_ID = 123456789012345678  # Özet çıkarılacak sohbet kanalı
 KOMUT_KANAL_ID = 876543210987654321  # !ozet komutunun çalışacağı kanal
 
@@ -64,7 +64,7 @@ async def on_ready():
     print(f"✅ {bot.user} başarıyla bağlandı ve göreve hazır!")
 
 # ---------------------------------------------------------
-# 4. SOHBET EVENT'İ (@mention)
+# 4. SAMİMİ VE DOĞAL SOHBET EVENT'İ (@mention)
 # ---------------------------------------------------------
 @bot.event
 async def on_message(message):
@@ -88,12 +88,11 @@ async def on_message(message):
 
             full_prompt = f"{SISTEM_KURALLARI}\n\nKullanıcı: {temiz_mesaj}\nSen:"
 
-            models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash"]
+            models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash"]
             yanit_metni = None
 
             for model_name in models_to_try:
                 try:
-                    # Thread executor ile senkron istemciyi bloklamadan çalıştırıyoruz
                     loop = asyncio.get_running_loop()
                     response = await loop.run_in_executor(
                         None,
@@ -107,7 +106,7 @@ async def on_message(message):
                         yanit_metni = response.text.strip()
                         break
                 except Exception as e:
-                    print(f"❌ Model Denemesi Hata Alındı ({model_name}): {e}")
+                    print(f"❌ Model Hatası ({model_name}): {e}")
                     continue
 
             if yanit_metni:
@@ -162,7 +161,7 @@ async def ozet(ctx, saat: int = 2):
             f"Son {saat} saatin sohbeti:\n\n{sohbet_metni}"
         )
 
-        models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash"]
+        models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash"]
         ozet_metni = None
 
         for model_name in models_to_try:
