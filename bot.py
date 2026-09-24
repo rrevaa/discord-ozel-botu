@@ -5,7 +5,6 @@ import discord
 from discord.ext import commands
 from datetime import datetime, timedelta, timezone
 from google import genai
-from google.genai import types
 
 # ---------------------------------------------------------
 # 1. API VE KANAL AYARLARI
@@ -64,7 +63,7 @@ async def on_ready():
     print(f"✅ {bot.user} başarıyla bağlandı ve göreve hazır!")
 
 # ---------------------------------------------------------
-# 4. SAMİMİ VE DOĞAL SOHBET EVENT'İ (@mention)
+# 4. SOHBET EVENT'İ (@mention)
 # ---------------------------------------------------------
 @bot.event
 async def on_message(message):
@@ -86,32 +85,33 @@ async def on_message(message):
                 await message.reply("Bu tür konulara pek girmeyelim derim 🙂")
                 return
 
-            prompt = (
-                f"{SISTEM_KURALLARI}\n\n"
-                f"Kullanıcı mesajı: {temiz_mesaj}"
-            )
+            prompt = f"{SISTEM_KURALLARI}\n\nKullanıcı mesajı: {temiz_mesaj}"
 
-            # Kararlı ve aktif API model isimleri
-            models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash"]
+            models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash"]
             yanit_metni = None
 
             for model_name in models_to_try:
                 try:
-                    response = await gemini_client.aio.models.generate_content(
-                        model=model_name,
-                        contents=prompt
+                    # Senkron çağrıyı asyncio executor ile güvenli çalıştırma
+                    loop = asyncio.get_running_loop()
+                    response = await loop.run_in_executor(
+                        None,
+                        lambda: gemini_client.models.generate_content(
+                            model=model_name,
+                            contents=prompt
+                        )
                     )
                     if response and response.text:
                         yanit_metni = response.text
                         break
                 except Exception as e:
-                    print(f"❌ Gemini API Hatanız ({model_name}): {e}")
+                    print(f"❌ Gemini Sohbet Hatası [{model_name}]: {e}")
                     continue
 
             if yanit_metni:
                 await message.reply(yanit_metni)
             else:
-                await message.reply("Biraz yoğunluk var galiba, tam anlayamadım tekrar söyler misin?")
+                await message.reply("Aksama oldu, tekrar yazar mısın?")
 
 # ---------------------------------------------------------
 # 5. SOHBET ÖZETLEME KOMUTU (!ozet)
@@ -160,20 +160,24 @@ async def ozet(ctx, saat: int = 2):
             f"Son {saat} saatin sohbeti:\n\n{sohbet_metni}"
         )
 
-        models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash"]
+        models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash"]
         ozet_metni = None
 
         for model_name in models_to_try:
             try:
-                response = await gemini_client.aio.models.generate_content(
-                    model=model_name,
-                    contents=prompt
+                loop = asyncio.get_running_loop()
+                response = await loop.run_in_executor(
+                    None,
+                    lambda: gemini_client.models.generate_content(
+                        model=model_name,
+                        contents=prompt
+                    )
                 )
                 if response and response.text:
                     ozet_metni = response.text
                     break
             except Exception as e:
-                print(f"❌ Özet Hatanız ({model_name}): {e}")
+                print(f"❌ Özet Hatası [{model_name}]: {e}")
                 continue
 
         if ozet_metni:
